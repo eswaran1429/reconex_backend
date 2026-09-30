@@ -67,7 +67,23 @@ model Subdomain {
   lastSeenAt  DateTime @default(now())
   createdAt   DateTime @default(now())
   domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  ports       Port[]
 
   @@unique([domainId, hostname])
   @@index([domainId])
+}
+
+model Port {
+  id          String    @id @default(dbgenerated("('port_'::text || nextval('\"Port_id_seq\"'::regclass))"))
+  subdomainId String
+  port        Int
+  protocol    String    @default("tcp")
+  service     String?
+  state       String    @default("open")
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  subdomain   Subdomain @relation(fields: [subdomainId], references: [id], onDelete: Cascade)
+
+  @@unique([subdomainId, port, protocol])
+  @@index([subdomainId])
 }
