@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(dbgenerated("('user_'::text || nextval('\"User_id_seq\"'::regclass))"))
   name      String
   email     String   @unique
   password  String
@@ -18,16 +18,56 @@ model User {
 }
 
 model Domain {
-  id         Int       @id @default(autoincrement())
-  userId     Int
+  id         String      @id @default(dbgenerated("('domain_'::text || nextval('\"Domain_id_seq\"'::regclass))"))
+  userId     String
   name       String
   url        String
-  status     String    @default("pending")
+  status     String      @default("ACTIVE")
   lastScanAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans      Scan[]
+  subdomains Subdomain[]
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+enum ScanStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Scan {
+  id          String     @id @default(dbgenerated("('scan_'::text || nextval('\"Scan_id_seq\"'::regclass))"))
+  domainId    String
+  status      ScanStatus @default(QUEUED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+  createdAt   DateTime   @default(now())
+  domain      Domain     @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Subdomain {
+  id          String   @id @default(dbgenerated("('subdomain_'::text || nextval('\"Subdomain_id_seq\"'::regclass))"))
+  domainId    String
+  hostname    String
+  ipAddress   String?
+  status      String   @default("ACTIVE")
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, hostname])
+  @@index([domainId])
 }

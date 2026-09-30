@@ -1,4 +1,4 @@
-const prisma = require("../services/prisma");
+const prisma = require("../../config/prisma");
 
 const addDomain = async (req, res) => {
     try {
@@ -49,7 +49,7 @@ const getDomains = async (req, res) => {
 const getDomain = async (req, res) => {
     try {
         const userId = req.user.id;
-        const domainId = parseInt(req.params.id);
+        const domainId = req.params.id;
         const domain = await prisma.domain.findUnique({
             where: {
                 userId: userId,
@@ -79,7 +79,7 @@ const getDomain = async (req, res) => {
 const updateDomain = async (req, res) => {
     try {
         const userId = req.user.id;
-        const domainId = parseInt(req.params.id);
+        const domainId = req.params.id;
         const { name, status, url } = req.body;
         const data = {}
         if (name != null && name != undefined) data.name = name;
@@ -116,7 +116,7 @@ const updateDomain = async (req, res) => {
 const deleteDomain = async (req, res) => {
     try {
         const userId = req.user.id;
-        const domainId = parseInt(req.params.id);
+        const domainId = req.params.id;
         await prisma.domain.delete({
             where: {
                 userId: userId,
