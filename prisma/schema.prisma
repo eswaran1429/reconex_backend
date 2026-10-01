@@ -29,9 +29,25 @@ model Domain {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   scans      Scan[]
   subdomains Subdomain[]
+  dnsRecords DnsRecord[]
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+model DnsRecord {
+  id        String   @id @default(cuid())
+  domainId  String
+  type      String
+  name      String
+  value     String
+  ttl       Int?
+  createdAt DateTime @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId])
+  @@index([domainId, type])
 }
 
 enum ScanStatus {
@@ -58,16 +74,18 @@ model Scan {
 }
 
 model Subdomain {
-  id          String   @id @default(dbgenerated("('subdomain_'::text || nextval('\"Subdomain_id_seq\"'::regclass))"))
-  domainId    String
-  hostname    String
-  ipAddress   String?
-  status      String   @default("ACTIVE")
-  firstSeenAt DateTime @default(now())
-  lastSeenAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  ports       Port[]
+  id              String                @id @default(dbgenerated("('subdomain_'::text || nextval('\"Subdomain_id_seq\"'::regclass))"))
+  domainId        String
+  hostname        String
+  ipAddress       String?
+  status          String                @default("ACTIVE")
+  firstSeenAt     DateTime              @default(now())
+  lastSeenAt      DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  domain          Domain                @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  ports           Port[]
+  sslCertificates SslCertificate[]
+  technologies    SubdomainTechnology[]
 
   @@unique([domainId, hostname])
   @@index([domainId])
@@ -86,4 +104,45 @@ model Port {
 
   @@unique([subdomainId, port, protocol])
   @@index([subdomainId])
+}
+
+model SslCertificate {
+  id          String    @id @default(cuid())
+  subdomainId String
+  issuer      String?
+  subject     String?
+  validFrom   DateTime?
+  expiresAt   DateTime?
+  tlsVersion  String?
+  fingerprint String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  subdomain Subdomain @relation(fields: [subdomainId], references: [id], onDelete: Cascade)
+
+  @@index([subdomainId])
+}
+
+model Technology {
+  id         String                @id @default(dbgenerated("('technology_'::text || nextval('\"Technology_id_seq\"'::regclass))"))
+  name       String                @unique
+  category   String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  subdomains SubdomainTechnology[]
+}
+
+model SubdomainTechnology {
+  id           String     @id @default(dbgenerated("('subdomain_technology_'::text || nextval('\"SubdomainTechnology_id_seq\"'::regclass))"))
+  subdomainId  String
+  technologyId String
+  version      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  subdomain    Subdomain  @relation(fields: [subdomainId], references: [id], onDelete: Cascade)
+  technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([subdomainId, technologyId])
+  @@index([subdomainId])
+  @@index([technologyId])
 }

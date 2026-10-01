@@ -1,12 +1,13 @@
 const router = require("express").Router();
 const {
     discoverSubdomains,
-    getSubdomain
+    getSubdomain,
+    getSubdomainById
 } = require("./subdomain.controller");
 const { authMiddleware } = require("../../middleware/auth.middleware");
 
 router.get("/discover/:id", authMiddleware, discoverSubdomains);
 
-router.get("/get/:id", authMiddleware, getSubdomain);
+router.get("/:id", authMiddleware, getSubdomainById);
 
 module.exports = router;
