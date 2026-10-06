@@ -18,25 +18,27 @@ model User {
 }
 
 model Domain {
-  id         String      @id @default(dbgenerated("('domain_'::text || nextval('\"Domain_id_seq\"'::regclass))"))
-  userId     String
-  name       String
-  url        String
-  status     String      @default("ACTIVE")
-  lastScanAt DateTime?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scans      Scan[]
-  subdomains Subdomain[]
-  dnsRecords DnsRecord[]
+  id               String            @id @default(dbgenerated("('domain_'::text || nextval('\"Domain_id_seq\"'::regclass))"))
+  userId           String
+  name             String
+  url              String
+  status           String            @default("ACTIVE")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subdomains       Subdomain[]
+  dnsRecords       DnsRecord[]
+  securityHeaders  SecurityHeader[]
+  exposedResources ExposedResource[]
 
   @@unique([userId, name])
   @@index([userId])
 }
 
+
 model DnsRecord {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("('dns_record_'::text || nextval('\"DnsRecord_id_seq\"'::regclass))"))
   domainId  String
   type      String
   name      String
@@ -48,29 +50,6 @@ model DnsRecord {
 
   @@index([domainId])
   @@index([domainId, type])
-}
-
-enum ScanStatus {
-  QUEUED
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-model Scan {
-  id          String     @id @default(dbgenerated("('scan_'::text || nextval('\"Scan_id_seq\"'::regclass))"))
-  domainId    String
-  status      ScanStatus @default(QUEUED)
-  startedAt   DateTime?
-  completedAt DateTime?
-  error       String?
-  createdAt   DateTime   @default(now())
-  domain      Domain     @relation(fields: [domainId], references: [id], onDelete: Cascade)
-
-  @@index([domainId])
-  @@index([status])
-  @@index([createdAt])
 }
 
 model Subdomain {
@@ -107,19 +86,22 @@ model Port {
 }
 
 model SslCertificate {
-  id          String    @id @default(cuid())
-  subdomainId String
-  issuer      String?
-  subject     String?
-  validFrom   DateTime?
-  expiresAt   DateTime?
-  tlsVersion  String?
-  fingerprint String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(dbgenerated("('ssl_certificate_'::text || nextval('\"SslCertificate_id_seq\"'::regclass))"))
+  subdomainId     String
+  issuer          String?
+  subject         String?
+  validFrom       DateTime?
+  expiresAt       DateTime?
+  tlsVersion      String?
+  fingerprint     String?
+  valid           Boolean?
+  validationError String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   subdomain Subdomain @relation(fields: [subdomainId], references: [id], onDelete: Cascade)
 
+  @@unique([subdomainId])
   @@index([subdomainId])
 }
 
@@ -145,4 +127,35 @@ model SubdomainTechnology {
   @@unique([subdomainId, technologyId])
   @@index([subdomainId])
   @@index([technologyId])
+}
+
+
+model SecurityHeader {
+  id         String   @id @default(dbgenerated("('security_header_'::text || nextval('\"SecurityHeader_id_seq\"'::regclass))"))
+  domainId   String
+  url        String
+  headerName String
+  present    Boolean
+  value      String?
+  severity   String?
+  scannedAt  DateTime @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, scannedAt])
+}
+
+model ExposedResource {
+  id          String   @id @default(dbgenerated("('exposed_resource_'::text || nextval('\"ExposedResource_id_seq\"'::regclass))"))
+  domainId    String
+  url         String
+  path        String
+  statusCode  Int?
+  accessible  Boolean
+  severity    String?
+  scannedAt   DateTime @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, scannedAt])
 }

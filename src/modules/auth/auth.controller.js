@@ -1,8 +1,19 @@
 const prisma = require("../../config/prisma");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const { sendSuccess, sendError, serverError } = require("../../utils/response");
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+const toPublicUser = (user) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    token: user.token,
+    createdAt: user.createdAt,
+});
+
+const signToken = (user) => jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "3d" });
 
 const register = async (req, res) => {
     try {
@@ -12,16 +23,19 @@ const register = async (req, res) => {
             where: { email: email }
         });
         if (user) {
-            return res.status(400).json({ message: "User already exists" });
+            return sendError(res, 400, "User already exists");
         }
         const hashedPassword = await bcrypt.hash(password, 10);
-        const token = jwt.sign({ email, password }, JWT_SECRET, { expiresIn: "3d" });
         const newUser = await prisma.user.create({
-            data: { name, email, password: hashedPassword, token }
+            data: { name, email, password: hashedPassword, token: "" }
         });
-        return res.status(200).json({ message: "User registered successfully", user: newUser });
+        const updatedUser = await prisma.user.update({
+            where: { id: newUser.id },
+            data: { token: signToken(newUser) }
+        });
+        return sendSuccess(res, 200, "User registered successfully", toPublicUser(updatedUser));
     } catch (error) {
-        return res.status(500).json({ message: "Internal server error", error: error.message });
+        return serverError(res, error);
     }
 
 }
@@ -33,21 +47,16 @@ const login = async (req, res) => {
         const user = await prisma.user.findUnique({
             where: { email: email }
         });
-        if (!user) {
-            return res.status(400).json({ message: "User not found" });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return sendError(res, 400, "Invalid email or password");
         }
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ message: "Invalid password" });
-        }
-        const token = jwt.sign({ email, password }, JWT_SECRET, { expiresIn: "3d" });
         const updatedUser = await prisma.user.update({
-            where: { email: email },
-            data: { token }
+            where: { id: user.id },
+            data: { token: signToken(user) }
         });
-        return res.status(200).json({ message: "User logged in successfully", user: updatedUser });
+        return sendSuccess(res, 200, "User logged in successfully", toPublicUser(updatedUser));
     } catch (error) {
-        return res.status(500).json({ message: "Internal server error", error: error.message });
+        return serverError(res, error);
     }
 
 }

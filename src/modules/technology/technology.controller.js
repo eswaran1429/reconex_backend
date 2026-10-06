@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { sendSuccess, sendError, serverError } = require("../../utils/response");
 const { scanTechnologies } = require("./technology.scanner");
 
 const getTechnologies = async (req, res) => {
@@ -14,25 +15,17 @@ const getTechnologies = async (req, res) => {
             },
         });
         if (!subdomain) {
-            return res.status(404).json({
-                success: false,
-                message: "Subdomain not found",
-            });
+            return sendError(res, 404, "Subdomain not found");
         }
 
         let detected;
         try {
             detected = await scanTechnologies(subdomain.hostname);
         } catch (error) {
-            return res.status(502).json({
-                success: false,
-                message: `Could not reach ${subdomain.hostname}`,
-                error: error.message,
-            });
+            return sendError(res, 502, `Could not reach ${subdomain.hostname}`, error);
         }
 
         for (const { name, category, version } of detected) {
-            // One Technology row per name, shared by all subdomains.
             const technology = await prisma.technology.upsert({
                 where: {
                     name: name,
@@ -44,7 +37,6 @@ const getTechnologies = async (req, res) => {
                 },
             });
 
-            // One link per subdomain + technology; keep the old version if none was detected this time.
             await prisma.subdomainTechnology.upsert({
                 where: {
                     subdomainId_technologyId: {
@@ -75,10 +67,7 @@ const getTechnologies = async (req, res) => {
             },
         });
 
-        return res.status(200).json({
-            success: true,
-            message: "Technologies fetched successfully",
-            data: technologies.map((entry) => ({
+        return sendSuccess(res, 200, "Technologies fetched successfully", technologies.map((entry) => ({
                 id: entry.id,
                 technologyId: entry.technologyId,
                 name: entry.technology.name,
@@ -86,14 +75,9 @@ const getTechnologies = async (req, res) => {
                 version: entry.version,
                 createdAt: entry.createdAt,
                 updatedAt: entry.updatedAt,
-            })),
-        });
+            })));
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error",
-            error: error.message
-        });
+        return serverError(res, error);
     }
 }
 

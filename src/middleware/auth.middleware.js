@@ -1,15 +1,13 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
+const { sendError } = require("../utils/response");
 
 const authMiddleware = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({
-                success: false,
-                message: "Authorization token missing",
-            });
+            return sendError(res, 401, "Authorization token missing");
         }
 
         const token = authHeader.split(" ")[1];
@@ -28,28 +26,18 @@ const authMiddleware = async (req, res, next) => {
         });
 
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: "User not found",
-            });
+            return sendError(res, 401, "User not found");
         }
 
         if (!user.token || user.token !== token) {
-            return res.status(401).json({
-                success: false,
-                message: "Token revoked, please log in again",
-            });
+            return sendError(res, 401, "Token revoked, please log in again");
         }
 
         const { token: _, ...safeUser } = user;
         req.user = safeUser;
         next();
     } catch (error) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized",
-            error: error.message
-        });
+        return sendError(res, 401, "Unauthorized", error);
     }
 }
 

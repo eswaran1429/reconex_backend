@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { sendSuccess, sendError, serverError } = require("../../utils/response");
 const net = require("net");
 
 const commonPorts = [
@@ -56,10 +57,7 @@ const discoverPorts = async (req, res) => {
     try {
         const subdomain = await findUserSubdomain(req.params.id, req.user.id);
         if (!subdomain) {
-            return res.status(404).json({
-                success: false,
-                message: "Subdomain not found",
-            });
+            return sendError(res, 404, "Subdomain not found");
         }
 
         const host = subdomain.ipAddress || subdomain.hostname;
@@ -109,17 +107,9 @@ const discoverPorts = async (req, res) => {
             },
         });
 
-        return res.status(200).json({
-            success: true,
-            data: result,
-        });
+        return sendSuccess(res, 200, "Ports discovered successfully", result);
     } catch (error) {
-        console.error("Port discovery error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: error.message || "Failed to discover ports",
-        });
+        return serverError(res, error);
     }
 };
 
@@ -127,10 +117,7 @@ const getPorts = async (req, res) => {
     try {
         const subdomain = await findUserSubdomain(req.params.id, req.user.id);
         if (!subdomain) {
-            return res.status(404).json({
-                success: false,
-                message: "Subdomain not found",
-            });
+            return sendError(res, 404, "Subdomain not found");
         }
 
         const result = await prisma.port.findMany({
@@ -142,17 +129,9 @@ const getPorts = async (req, res) => {
             },
         });
 
-        return res.status(200).json({
-            success: true,
-            data: result,
-        });
+        return sendSuccess(res, 200, "Ports fetched successfully", result);
     } catch (error) {
-        console.error("Port fetch error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: error.message || "Failed to fetch ports",
-        });
+        return serverError(res, error);
     }
 };
 

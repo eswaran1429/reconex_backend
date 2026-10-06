@@ -1,12 +1,9 @@
 const axios = require("axios");
 
-// Each rule says where to look. A regex's first capture group (if any) is the version.
-// `implies` adds technologies that must also be present (e.g. Express runs on Node.js).
 const rules = [
     {
         name: "Nginx",
         category: "Web Server",
-        // OpenResty is Nginx with extra modules; its version number isn't Nginx's, so none is captured.
         headers: { server: /nginx(?:\/([\d.]+))?|openresty/i },
     },
     {
@@ -84,7 +81,6 @@ const getScriptSources = (html) => {
     return [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)].map((m) => m[1]);
 }
 
-// Returns { matched, version } for the first regex that matches any of the values.
 const matchAny = (regexes, values) => {
     for (const regex of regexes) {
         for (const value of values) {
@@ -132,7 +128,6 @@ const detect = (headers, html) => {
     return [...found.values()];
 }
 
-// Fetches the subdomain's homepage and returns [{ name, category, version }].
 const scanTechnologies = async (hostname) => {
     const response = await fetchPage(hostname);
     const html = typeof response.data === "string" ? response.data : "";
