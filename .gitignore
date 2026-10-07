@@ -4,5 +4,5 @@ node_modules
 .claude/
 .agents/
 /generated/prisma
+prisma/migrations
 *.md
-/prisma/migrations/
