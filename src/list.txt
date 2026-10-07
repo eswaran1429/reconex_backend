@@ -1,0 +1,183 @@
+No. The APIs I listed were the **next APIs**, not the complete API set.
+
+For your current project, I'd structure the backend APIs like this:
+
+### 1. Domains
+
+```text
+POST   /domains
+GET    /domains
+GET    /domains/:id
+DELETE /domains/:id
+```
+
+### 2. Scans
+
+```text
+POST   /domains/:id/scan
+GET    /domains/:id/scans
+GET    /scans/:id
+```
+
+### 3. Subdomains
+
+```text
+GET    /domains/:id/subdomains
+GET    /subdomains/:id
+```
+
+### 4. Ports
+
+```text
+GET    /domains/:id/ports
+GET    /subdomains/:id/ports
+```
+
+### 5. Technologies
+
+```text
+GET    /domains/:id/technologies
+GET    /subdomains/:id/technologies
+```
+
+### 6. DNS
+
+```text
+GET    /domains/:id/dns
+GET    /domains/:id/dns/history
+```
+
+### 7. SSL
+
+```text
+GET    /domains/:id/ssl
+GET    /domains/:id/ssl/history
+```
+
+### 8. Security Headers
+
+**Next**
+
+```text
+GET    /domains/:id/headers
+GET    /domains/:id/headers/history
+```
+
+### 9. Exposed Resources
+
+```text
+GET    /domains/:id/exposed-resources
+GET    /domains/:id/exposed-resources/history
+```
+
+### 10. Scan History
+
+```text
+GET    /domains/:id/history
+GET    /domains/:id/history/:scanId
+```
+
+### 11. Changes
+
+```text
+GET    /domains/:id/changes
+GET    /domains/:id/changes/:changeId
+```
+
+This handles things like:
+
+```text
+New subdomain
+New port
+Closed port
+DNS changed
+SSL changed
+Technology changed
+Security header changed
+New exposed resource
+```
+
+### 12. Alerts
+
+```text
+GET    /alerts
+GET    /alerts/:id
+GET    /domains/:id/alerts
+PATCH  /alerts/:id/read
+PATCH  /alerts/:id/resolve
+```
+
+### 13. Dashboard
+
+```text
+GET    /dashboard
+GET    /domains/:id/dashboard
+```
+
+The dashboard endpoint aggregates things like:
+
+```text
+Total subdomains
+Open ports
+Technologies
+SSL status
+Active alerts
+Recent changes
+Last scan
+```
+
+### 14. Scanning/Scheduling
+
+Later, when you add BullMQ:
+
+```text
+POST   /domains/:id/scan
+GET    /scans/:id/status
+
+POST   /domains/:id/schedule
+GET    /domains/:id/schedule
+PATCH  /domains/:id/schedule
+DELETE /domains/:id/schedule
+```
+
+---
+
+## So the complete core API areas are
+
+```text
+Domains
+   ↓
+Scans
+   ↓
+Subdomains
+   ↓
+Ports
+   ↓
+Technologies
+   ↓
+DNS
+   ↓
+SSL
+   ↓
+Security Headers
+   ↓
+Exposed Resources
+   ↓
+History / Snapshots
+   ↓
+Change Detection
+   ↓
+Alerts
+   ↓
+Dashboard
+   ↓
+Scheduled Scanning
+```
+
+Since you've **already implemented Domain, Subdomain, Ports, Technology, DNS, and SSL**, I would **not add more API categories yet**.
+
+Your next backend feature should be:
+
+**Security Headers → Exposed Resources → Scan Snapshots → Change Detection → Alerts.**
+
+That sequence is what transforms your project from a collection of scanners into an actual **Attack Surface Monitoring platform**.

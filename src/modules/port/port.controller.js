@@ -1,5 +1,6 @@
 const prisma = require("../../config/prisma");
 const { sendSuccess, sendError, serverError } = require("../../utils/response");
+const { alertOnNewPorts, runAlerts } = require("../alert/alert.service");
 const net = require("net");
 
 const commonPorts = [
@@ -53,6 +54,73 @@ const findUserSubdomain = (subdomainId, userId) => {
     });
 }
 
+const syncPorts = async (subdomain) => {
+    const previousPorts = await prisma.port.findMany({
+        where: {
+            subdomainId: subdomain.id,
+        },
+        select: {
+            port: true,
+            protocol: true,
+            state: true,
+        },
+    });
+    const previouslyOpen = new Set(previousPorts
+        .filter((port) => port.state === "open")
+        .map((port) => `${port.port}/${port.protocol}`));
+
+    const host = subdomain.ipAddress || subdomain.hostname;
+    const checks = await Promise.all(
+        commonPorts.map(async (entry) => ({
+            ...entry,
+            open: await checkPort(host, entry.port),
+        }))
+    );
+
+    const now = new Date();
+    const openPorts = checks.filter((check) => check.open);
+
+    const result = [];
+    for (const { port, service } of openPorts) {
+        const saved = await prisma.port.upsert({
+            where: {
+                subdomainId_port_protocol: {
+                    subdomainId: subdomain.id,
+                    port,
+                    protocol: "tcp",
+                },
+            },
+            update: {
+                state: "open",
+                service,
+                lastSeenAt: now,
+            },
+            create: {
+                subdomainId: subdomain.id,
+                port,
+                protocol: "tcp",
+                service,
+                state: "open",
+            },
+        });
+        result.push(saved);
+    }
+
+    await prisma.port.updateMany({
+        where: {
+            subdomainId: subdomain.id,
+            port: { notIn: openPorts.map((check) => check.port) },
+        },
+        data: {
+            state: "closed",
+        },
+    });
+
+    const newlyOpen = result.filter((port) => !previouslyOpen.has(`${port.port}/${port.protocol}`));
+    await runAlerts(() => alertOnNewPorts(subdomain, previousPorts.length > 0, newlyOpen));
+    return result;
+}
+
 const discoverPorts = async (req, res) => {
     try {
         const subdomain = await findUserSubdomain(req.params.id, req.user.id);
@@ -60,53 +128,7 @@ const discoverPorts = async (req, res) => {
             return sendError(res, 404, "Subdomain not found");
         }
 
-        const host = subdomain.ipAddress || subdomain.hostname;
-        const checks = await Promise.all(
-            commonPorts.map(async (entry) => ({
-                ...entry,
-                open: await checkPort(host, entry.port),
-            }))
-        );
-
-        const now = new Date();
-        const openPorts = checks.filter((check) => check.open);
-
-        const result = [];
-        for (const { port, service } of openPorts) {
-            const saved = await prisma.port.upsert({
-                where: {
-                    subdomainId_port_protocol: {
-                        subdomainId: subdomain.id,
-                        port,
-                        protocol: "tcp",
-                    },
-                },
-                update: {
-                    state: "open",
-                    service,
-                    lastSeenAt: now,
-                },
-                create: {
-                    subdomainId: subdomain.id,
-                    port,
-                    protocol: "tcp",
-                    service,
-                    state: "open",
-                },
-            });
-            result.push(saved);
-        }
-
-        await prisma.port.updateMany({
-            where: {
-                subdomainId: subdomain.id,
-                port: { notIn: openPorts.map((check) => check.port) },
-            },
-            data: {
-                state: "closed",
-            },
-        });
-
+        const result = await syncPorts(subdomain);
         return sendSuccess(res, 200, "Ports discovered successfully", result);
     } catch (error) {
         return serverError(res, error);
@@ -137,5 +159,6 @@ const getPorts = async (req, res) => {
 
 module.exports = {
     discoverPorts,
-    getPorts
+    getPorts,
+    syncPorts,
 };

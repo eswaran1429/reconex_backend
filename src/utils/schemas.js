@@ -18,10 +18,18 @@ const pagination = z.object({
     limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+const severities = ["critical", "high", "medium", "low", "info"];
+
+const severityList = z.string()
+    .transform((value) => value.split(",").map((item) => item.trim().toLowerCase()))
+    .pipe(z.array(z.enum(severities)));
+
 module.exports = {
     z,
     prefixedId,
     idParam,
     httpUrl,
     pagination,
+    severities,
+    severityList,
 };

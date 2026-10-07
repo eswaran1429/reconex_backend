@@ -8,6 +8,10 @@ const domainRoutes = require("./modules/domains/domain.routes");
 const subdomainRoutes = require("./modules/subdomain/subdomain.routes");
 const portRoutes = require("./modules/port/port.routes");
 const technologyRoutes = require("./modules/technology/technology.routes");
+const alertRoutes = require("./modules/alert/alert.routes");
+const scanRoutes = require("./modules/scan/scan.routes");
+const changeRoutes = require("./modules/scan/change.routes");
+const { recoverInterruptedScans } = require("./modules/scan/scan.service");
 const { sendSuccess, sendError, serverError } = require("./utils/response");
 
 app.use(cors());
@@ -18,6 +22,9 @@ app.use("/domain", domainRoutes);
 app.use("/subdomain", subdomainRoutes);
 app.use("/port", portRoutes);
 app.use("/technology", technologyRoutes);
+app.use("/alert", alertRoutes);
+app.use("/scan", scanRoutes);
+app.use("/change", changeRoutes);
 
 app.get("/", (req, res) => {
     sendSuccess(res, 200, "API is running");
@@ -38,4 +45,5 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    recoverInterruptedScans().catch((error) => console.error(error));
 });

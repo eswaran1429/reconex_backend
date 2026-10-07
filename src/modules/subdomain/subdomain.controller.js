@@ -2,6 +2,8 @@ const tls = require("tls");
 const dns = require("../../config/dns");
 const prisma = require("../../config/prisma");
 const { sendSuccess, sendError, serverError } = require("../../utils/response");
+const { alertOnNewSubdomains, alertOnCertificate, runAlerts } = require("../alert/alert.service");
+const { ScanError } = require("../../utils/errors");
 
 const commonSubdomains = [
     "www",
@@ -26,6 +28,59 @@ const findUserSubdomain = (subdomainId, userId) => {
     });
 }
 
+const syncSubdomains = async (domain) => {
+    const rootHostname = new URL(domain.url).hostname;
+
+    const known = new Set((await prisma.subdomain.findMany({
+        where: {
+            domainId: domain.id,
+        },
+        select: {
+            hostname: true,
+        },
+    })).map((subdomain) => subdomain.hostname));
+
+    const result = [];
+
+    for (const prefix of commonSubdomains) {
+        const hostname = `${prefix}.${rootHostname}`;
+
+        try {
+            const addresses = await dns.resolve4(hostname);
+
+            const ipAddress = addresses[0] || null;
+
+            const subdomain = await prisma.subdomain.upsert({
+                where: {
+                    domainId_hostname: {
+                        domainId: domain.id,
+                        hostname,
+                    },
+                },
+                update: {
+                    ipAddress,
+                    status: "ACTIVE",
+                    lastSeenAt: new Date(),
+                },
+                create: {
+                    domainId: domain.id,
+                    hostname,
+                    ipAddress,
+                    status: "ACTIVE",
+                },
+            });
+
+            result.push(subdomain);
+        } catch (error) {
+            if (!["ENOTFOUND", "ENODATA"].includes(error.code)) throw error;
+        }
+    }
+
+    const discovered = result.filter((subdomain) => !known.has(subdomain.hostname));
+    await runAlerts(() => alertOnNewSubdomains(domain.id, known.size > 0, discovered));
+    return result;
+}
+
 const discoverSubdomains = async (req, res) => {
     try {
         const { id } = req.params;
@@ -40,44 +95,7 @@ const discoverSubdomains = async (req, res) => {
             return sendError(res, 404, "Domain not found");
         }
 
-        const rootHostname = new URL(domain.url).hostname;
-
-        const result = [];
-
-        for (const prefix of commonSubdomains) {
-            const hostname = `${prefix}.${rootHostname}`;
-
-            try {
-                const addresses = await dns.resolve4(hostname);
-
-                const ipAddress = addresses[0] || null;
-
-                const subdomain = await prisma.subdomain.upsert({
-                    where: {
-                        domainId_hostname: {
-                            domainId: domain.id,
-                            hostname,
-                        },
-                    },
-                    update: {
-                        ipAddress,
-                        status: "ACTIVE",
-                        lastSeenAt: new Date(),
-                    },
-                    create: {
-                        domainId: domain.id,
-                        hostname,
-                        ipAddress,
-                        status: "ACTIVE",
-                    },
-                });
-
-                result.push(subdomain);
-            } catch (error) {
-                if (!["ENOTFOUND", "ENODATA"].includes(error.code)) throw error;
-            }
-        }
-
+        const result = await syncSubdomains(domain);
         return sendSuccess(res, 200, "Subdomains discovered successfully", result);
     } catch (error) {
         return serverError(res, error);
@@ -156,6 +174,45 @@ const lookupSSLCertificate = (hostname) => {
     });
 }
 
+const syncCertificate = async (subdomain) => {
+    let result;
+    try {
+        result = await lookupSSLCertificate(subdomain.hostname);
+    } catch (error) {
+        throw new ScanError(`Could not connect to ${subdomain.hostname}:443`, error);
+    }
+
+    const { cert, protocol, authorized, authorizationError } = result;
+    if (!cert || Object.keys(cert).length === 0) {
+        throw new ScanError(`${subdomain.hostname} did not present a certificate`);
+    }
+
+    const data = {
+        issuer: cert.issuer?.O || cert.issuer?.CN || null,
+        subject: cert.subject?.CN || null,
+        validFrom: cert.valid_from ? new Date(cert.valid_from) : null,
+        expiresAt: cert.valid_to ? new Date(cert.valid_to) : null,
+        tlsVersion: protocol,
+        fingerprint: cert.fingerprint256 || null,
+        valid: authorized,
+        validationError: authorizationError,
+    };
+
+    const certificate = await prisma.sslCertificate.upsert({
+        where: {
+            subdomainId: subdomain.id,
+        },
+        update: data,
+        create: {
+            ...data,
+            subdomainId: subdomain.id,
+        },
+    });
+
+    await runAlerts(() => alertOnCertificate(subdomain, certificate));
+    return certificate;
+}
+
 const getSSLCertificate = async (req, res) => {
     try {
         const subdomain = await findUserSubdomain(req.params.id, req.user.id);
@@ -163,42 +220,12 @@ const getSSLCertificate = async (req, res) => {
             return sendError(res, 404, "Subdomain not found");
         }
 
-        let result;
-        try {
-            result = await lookupSSLCertificate(subdomain.hostname);
-        } catch (error) {
-            return sendError(res, 502, `Could not connect to ${subdomain.hostname}:443`, error);
-        }
-
-        const { cert, protocol, authorized, authorizationError } = result;
-        if (!cert || Object.keys(cert).length === 0) {
-            return sendError(res, 502, `${subdomain.hostname} did not present a certificate`);
-        }
-
-        const data = {
-            issuer: cert.issuer?.O || cert.issuer?.CN || null,
-            subject: cert.subject?.CN || null,
-            validFrom: cert.valid_from ? new Date(cert.valid_from) : null,
-            expiresAt: cert.valid_to ? new Date(cert.valid_to) : null,
-            tlsVersion: protocol,
-            fingerprint: cert.fingerprint256 || null,
-            valid: authorized,
-            validationError: authorizationError,
-        };
-
-        const certificate = await prisma.sslCertificate.upsert({
-            where: {
-                subdomainId: subdomain.id,
-            },
-            update: data,
-            create: {
-                ...data,
-                subdomainId: subdomain.id,
-            },
-        });
-
+        const certificate = await syncCertificate(subdomain);
         return sendSuccess(res, 200, "SSL certificate fetched successfully", certificate);
     } catch (error) {
+        if (error instanceof ScanError) {
+            return sendError(res, 502, error.message, error.cause);
+        }
         return serverError(res, error);
     }
 }
@@ -207,5 +234,7 @@ module.exports = {
     discoverSubdomains,
     getSubdomains,
     getSubdomainById,
-    getSSLCertificate
+    getSSLCertificate,
+    syncSubdomains,
+    syncCertificate,
 };

@@ -1,5 +1,7 @@
 const express = require("express");
-const { addDomain, getDomains, updateDomain, deleteDomain, getDomain, getDNSRecords, getSecurityHeaders, getExposedResources, getScanHistory, getChanges } = require("./domain.controller");
+const { addDomain, getDomains, updateDomain, deleteDomain, getDomain, getDNSRecords, getSecurityHeaders, getExposedResources, getScanHistory, getDashboard } = require("./domain.controller");
+const { startDomainScan, getDomainScans, getDomainChanges } = require("../scan/scan.controller");
+const { scanListQuery, changeQuery } = require("../scan/scan.schemas");
 const { authMiddleware } = require("../../middleware/auth.middleware");
 const { validate } = require("../../middleware/validate");
 const { z, idParam, httpUrl, pagination } = require("../../utils/schemas");
@@ -31,6 +33,9 @@ router.get("/dns/:id", authMiddleware, validate({ params: domainId }), getDNSRec
 router.get("/security-headers/:id", authMiddleware, validate({ params: domainId }), getSecurityHeaders);
 router.get("/exposed-resources/:id", authMiddleware, validate({ params: domainId }), getExposedResources);
 router.get("/history/:id", authMiddleware, validate({ params: domainId, query: snapshotQuery }), getScanHistory);
-router.get("/changes/:id", authMiddleware, validate({ params: domainId, query: snapshotQuery }), getChanges);
+router.get("/changes/:id", authMiddleware, validate({ params: domainId, query: changeQuery }), getDomainChanges);
+router.post("/scan/:id", authMiddleware, validate({ params: domainId }), startDomainScan);
+router.get("/scans/:id", authMiddleware, validate({ params: domainId, query: scanListQuery }), getDomainScans);
+router.get("/dashboard/:id", authMiddleware, validate({ params: domainId }), getDashboard);
 
 module.exports = router;

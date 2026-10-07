@@ -18,24 +18,26 @@ model User {
 }
 
 model Domain {
-  id               String            @id @default(dbgenerated("('domain_'::text || nextval('\"Domain_id_seq\"'::regclass))"))
-  userId           String
-  name             String
-  url              String
-  status           String            @default("ACTIVE")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id        String   @id @default(dbgenerated("('domain_'::text || nextval('\"Domain_id_seq\"'::regclass))"))
+  userId    String
+  name      String
+  url       String
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   subdomains       Subdomain[]
   dnsRecords       DnsRecord[]
   securityHeaders  SecurityHeader[]
   exposedResources ExposedResource[]
+  alerts           Alert[]
+  scans            Scan[]
+  changes          Change[]
 
   @@unique([userId, name])
   @@index([userId])
 }
-
 
 model DnsRecord {
   id        String   @id @default(dbgenerated("('dns_record_'::text || nextval('\"DnsRecord_id_seq\"'::regclass))"))
@@ -129,7 +131,6 @@ model SubdomainTechnology {
   @@index([technologyId])
 }
 
-
 model SecurityHeader {
   id         String   @id @default(dbgenerated("('security_header_'::text || nextval('\"SecurityHeader_id_seq\"'::regclass))"))
   domainId   String
@@ -146,16 +147,73 @@ model SecurityHeader {
 }
 
 model ExposedResource {
-  id          String   @id @default(dbgenerated("('exposed_resource_'::text || nextval('\"ExposedResource_id_seq\"'::regclass))"))
-  domainId    String
-  url         String
-  path        String
-  statusCode  Int?
-  accessible  Boolean
-  severity    String?
-  scannedAt   DateTime @default(now())
+  id         String   @id @default(dbgenerated("('exposed_resource_'::text || nextval('\"ExposedResource_id_seq\"'::regclass))"))
+  domainId   String
+  url        String
+  path       String
+  statusCode Int?
+  accessible Boolean
+  severity   String?
+  scannedAt  DateTime @default(now())
 
   domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   @@index([domainId, scannedAt])
+}
+
+model Alert {
+  id        String   @id @default(dbgenerated("('alert_'::text || nextval('\"Alert_id_seq\"'::regclass))"))
+  domainId  String
+  type      String
+  severity  String
+  title     String
+  message   String
+  metadata  Json?
+  key       String?
+  createdAt DateTime @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, key])
+  @@index([domainId, createdAt])
+  @@index([severity])
+}
+
+model Scan {
+  id          String    @id @default(dbgenerated("('scan_'::text || nextval('\"Scan_id_seq\"'::regclass))"))
+  domainId    String
+  status      String    @default("QUEUED")
+  trigger     String    @default("manual")
+  steps       Json?
+  snapshot    Json?
+  changeCount Int       @default(0)
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  domain  Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  changes Change[]
+
+  @@index([domainId, createdAt])
+  @@index([status])
+}
+
+model Change {
+  id        String   @id @default(dbgenerated("('change_'::text || nextval('\"Change_id_seq\"'::regclass))"))
+  domainId  String
+  scanId    String
+  category  String
+  type      String
+  key       String
+  severity  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, createdAt])
+  @@index([scanId])
 }
