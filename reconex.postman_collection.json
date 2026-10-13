@@ -1,0 +1,245 @@
+{
+  "info": {
+    "name": "Reconex Backend",
+    "description": "Set `rbaseurl` (default http://localhost:3000). Run Auth > Login first: it stores `token`. Domain > List Domains stores `domainId`; Subdomain > List Subdomains stores `subdomainId`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "rbaseurl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "domainId", "value": "domain_1" },
+    { "key": "subdomainId", "value": "subdomain_1" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "API Status",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/", "host": ["{{rbaseurl}}"], "path": [""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data && body.data.token) pm.collectionVariables.set(\"token\", body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{rbaseurl}}/auth/register", "host": ["{{rbaseurl}}"], "path": ["auth", "register"] },
+            "description": "name 1-100 chars, valid email, password 8-72 chars."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data && body.data.token) pm.collectionVariables.set(\"token\", body.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{rbaseurl}}/auth/login", "host": ["{{rbaseurl}}"], "path": ["auth", "login"] },
+            "description": "Rate limited: 10 failed attempts per IP per 15 minutes, then 429."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Domain",
+      "item": [
+        {
+          "name": "Add Domain",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"example\",\n  \"url\": \"https://example.com\"\n}"
+            },
+            "url": { "raw": "{{rbaseurl}}/domain/add", "host": ["{{rbaseurl}}"], "path": ["domain", "add"] },
+            "description": "url must start with http:// or https://. Duplicate name returns 409."
+          }
+        },
+        {
+          "name": "List Domains",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && Array.isArray(body.data) && body.data.length) pm.collectionVariables.set(\"domainId\", body.data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/domain/get", "host": ["{{rbaseurl}}"], "path": ["domain", "get"] }
+          }
+        },
+        {
+          "name": "Get Domain",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/domain/get/{{domainId}}", "host": ["{{rbaseurl}}"], "path": ["domain", "get", "{{domainId}}"] }
+          }
+        },
+        {
+          "name": "Update Domain",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": { "raw": "{{rbaseurl}}/domain/update/{{domainId}}", "host": ["{{rbaseurl}}"], "path": ["domain", "update", "{{domainId}}"] },
+            "description": "Any of name, url, status (ACTIVE | INACTIVE). Empty body returns 400."
+          }
+        },
+        {
+          "name": "Delete Domain",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{rbaseurl}}/domain/delete/{{domainId}}", "host": ["{{rbaseurl}}"], "path": ["domain", "delete", "{{domainId}}"] },
+            "description": "Also deletes the domain's subdomains, ports, DNS records and certificates."
+          }
+        },
+        {
+          "name": "DNS Records",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/domain/dns/{{domainId}}", "host": ["{{rbaseurl}}"], "path": ["domain", "dns", "{{domainId}}"] },
+            "description": "Live lookup of A, AAAA, CNAME, MX, NS, TXT, SOA; replaces stored records."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subdomain",
+      "item": [
+        {
+          "name": "Discover Subdomains",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/subdomain/discover/{{domainId}}", "host": ["{{rbaseurl}}"], "path": ["subdomain", "discover", "{{domainId}}"] }
+          }
+        },
+        {
+          "name": "List Subdomains",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data && body.data.items && body.data.items.length) pm.collectionVariables.set(\"subdomainId\", body.data.items[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{rbaseurl}}/subdomain/list/{{domainId}}?page=1&limit=50",
+              "host": ["{{rbaseurl}}"],
+              "path": ["subdomain", "list", "{{domainId}}"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50", "description": "1-100" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Subdomain",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/subdomain/{{subdomainId}}", "host": ["{{rbaseurl}}"], "path": ["subdomain", "{{subdomainId}}"] }
+          }
+        },
+        {
+          "name": "SSL Certificate",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/subdomain/ssl/{{subdomainId}}", "host": ["{{rbaseurl}}"], "path": ["subdomain", "ssl", "{{subdomainId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Port",
+      "item": [
+        {
+          "name": "Discover Ports",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/port/discover/{{subdomainId}}", "host": ["{{rbaseurl}}"], "path": ["port", "discover", "{{subdomainId}}"] }
+          }
+        },
+        {
+          "name": "Get Ports",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/port/get/{{subdomainId}}", "host": ["{{rbaseurl}}"], "path": ["port", "get", "{{subdomainId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Technology",
+      "item": [
+        {
+          "name": "Technologies",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{rbaseurl}}/technology/{{subdomainId}}", "host": ["{{rbaseurl}}"], "path": ["technology", "{{subdomainId}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}

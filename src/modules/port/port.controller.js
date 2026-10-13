@@ -157,8 +157,59 @@ const getPorts = async (req, res) => {
     }
 };
 
+const getDomainPorts = async (req, res) => {
+    try {
+        const domain = await prisma.domain.findUnique({
+            where: {
+                id: req.params.id,
+                userId: req.user.id,
+            },
+        });
+        if (!domain) {
+            return sendError(res, 404, "Domain not found");
+        }
+
+        const { page, limit, state } = req.validated.query;
+        const where = {
+            subdomain: { domainId: domain.id },
+            ...(state && { state }),
+        };
+        const [ports, total] = await prisma.$transaction([
+            prisma.port.findMany({
+                where,
+                include: {
+                    subdomain: {
+                        select: { id: true, hostname: true, ipAddress: true },
+                    },
+                },
+                orderBy: [{ port: "asc" }, { subdomainId: "asc" }],
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            prisma.port.count({ where }),
+        ]);
+
+        return sendSuccess(res, 200, "Domain ports fetched successfully", {
+            items: ports.map(({ subdomain, ...port }) => ({
+                ...port,
+                hostname: subdomain.hostname,
+                ipAddress: subdomain.ipAddress,
+            })),
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        });
+    } catch (error) {
+        return serverError(res, error);
+    }
+};
+
 module.exports = {
     discoverPorts,
     getPorts,
     syncPorts,
+    getDomainPorts,
 };

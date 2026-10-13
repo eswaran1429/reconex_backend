@@ -91,7 +91,65 @@ const getTechnologies = async (req, res) => {
     }
 }
 
+const getDomainTechnologies = async (req, res) => {
+    try {
+        const domain = await prisma.domain.findUnique({
+            where: {
+                id: req.params.id,
+                userId: req.user.id,
+            },
+        });
+        if (!domain) {
+            return sendError(res, 404, "Domain not found");
+        }
+
+        const links = await prisma.subdomainTechnology.findMany({
+            where: {
+                subdomain: { domainId: domain.id },
+            },
+            include: {
+                technology: true,
+                subdomain: {
+                    select: { id: true, hostname: true },
+                },
+            },
+            orderBy: {
+                subdomain: { hostname: "asc" },
+            },
+        });
+
+        const grouped = new Map();
+        for (const link of links) {
+            const { technology, subdomain } = link;
+            if (!grouped.has(technology.id)) {
+                grouped.set(technology.id, {
+                    technologyId: technology.id,
+                    name: technology.name,
+                    category: technology.category,
+                    subdomainCount: 0,
+                    subdomains: [],
+                });
+            }
+            const entry = grouped.get(technology.id);
+            entry.subdomainCount += 1;
+            entry.subdomains.push({
+                subdomainId: subdomain.id,
+                hostname: subdomain.hostname,
+                version: link.version,
+            });
+        }
+
+        const technologies = [...grouped.values()]
+            .sort((a, b) => b.subdomainCount - a.subdomainCount || a.name.localeCompare(b.name));
+
+        return sendSuccess(res, 200, "Domain technologies fetched successfully", technologies);
+    } catch (error) {
+        return serverError(res, error);
+    }
+}
+
 module.exports = {
     getTechnologies,
     syncTechnologies,
+    getDomainTechnologies,
 };

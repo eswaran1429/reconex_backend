@@ -2,6 +2,8 @@ const express = require("express");
 const { addDomain, getDomains, updateDomain, deleteDomain, getDomain, getDNSRecords, getSecurityHeaders, getExposedResources, getScanHistory, getDashboard } = require("./domain.controller");
 const { startDomainScan, getDomainScans, getDomainChanges } = require("../scan/scan.controller");
 const { scanListQuery, changeQuery } = require("../scan/scan.schemas");
+const { getDomainPorts } = require("../port/port.controller");
+const { getDomainTechnologies } = require("../technology/technology.controller");
 const { authMiddleware } = require("../../middleware/auth.middleware");
 const { validate } = require("../../middleware/validate");
 const { z, idParam, httpUrl, pagination } = require("../../utils/schemas");
@@ -11,6 +13,10 @@ const domainId = idParam("domain");
 
 const snapshotQuery = pagination.extend({
     type: z.enum(["headers", "exposed_resources"]).optional(),
+});
+
+const portQuery = pagination.extend({
+    state: z.enum(["open", "closed"]).optional(),
 });
 
 const addBody = z.object({
@@ -37,5 +43,7 @@ router.get("/changes/:id", authMiddleware, validate({ params: domainId, query: c
 router.post("/scan/:id", authMiddleware, validate({ params: domainId }), startDomainScan);
 router.get("/scans/:id", authMiddleware, validate({ params: domainId, query: scanListQuery }), getDomainScans);
 router.get("/dashboard/:id", authMiddleware, validate({ params: domainId }), getDashboard);
+router.get("/ports/:id", authMiddleware, validate({ params: domainId, query: portQuery }), getDomainPorts);
+router.get("/technologies/:id", authMiddleware, validate({ params: domainId }), getDomainTechnologies);
 
 module.exports = router;
