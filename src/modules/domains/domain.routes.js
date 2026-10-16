@@ -4,6 +4,7 @@ const { startDomainScan, getDomainScans, getDomainChanges } = require("../scan/s
 const { scanListQuery, changeQuery } = require("../scan/scan.schemas");
 const { getDomainPorts } = require("../port/port.controller");
 const { getDomainTechnologies } = require("../technology/technology.controller");
+const { getDomainGraph } = require("../graph/graph.controller");
 const { authMiddleware } = require("../../middleware/auth.middleware");
 const { validate } = require("../../middleware/validate");
 const { z, idParam, httpUrl, pagination } = require("../../utils/schemas");
@@ -45,5 +46,6 @@ router.get("/scans/:id", authMiddleware, validate({ params: domainId, query: sca
 router.get("/dashboard/:id", authMiddleware, validate({ params: domainId }), getDashboard);
 router.get("/ports/:id", authMiddleware, validate({ params: domainId, query: portQuery }), getDomainPorts);
 router.get("/technologies/:id", authMiddleware, validate({ params: domainId }), getDomainTechnologies);
+router.get("/graph/:id", authMiddleware, validate({ params: domainId }), getDomainGraph);
 
 module.exports = router;
