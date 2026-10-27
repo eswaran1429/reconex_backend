@@ -6,6 +6,7 @@ const { z, prefixedId, pagination, severityList } = require("../../utils/schemas
 
 const alertQuery = pagination.extend({
     domainId: prefixedId("domain").optional(),
+    networkId: prefixedId("network").optional(),
     severity: severityList.optional(),
     type: z.string().trim().min(1).max(50).optional(),
     since: z.coerce.date().optional(),

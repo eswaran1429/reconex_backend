@@ -11,6 +11,9 @@ const technologyRoutes = require("./modules/technology/technology.routes");
 const alertRoutes = require("./modules/alert/alert.routes");
 const scanRoutes = require("./modules/scan/scan.routes");
 const changeRoutes = require("./modules/scan/change.routes");
+const networkRoutes = require("./modules/network/network.routes");
+const networkScanRoutes = require("./modules/network/network-scan.routes");
+const networkDeviceRoutes = require("./modules/network/network-device.routes");
 const { recoverInterruptedScans } = require("./modules/scan/scan.service");
 const { sendSuccess, sendError, serverError } = require("./utils/response");
 
@@ -25,6 +28,9 @@ app.use("/technology", technologyRoutes);
 app.use("/alert", alertRoutes);
 app.use("/scan", scanRoutes);
 app.use("/change", changeRoutes);
+app.use("/network", networkRoutes);
+app.use("/network-scan", networkScanRoutes);
+app.use("/network-device", networkDeviceRoutes);
 
 app.get("/", (req, res) => {
     sendSuccess(res, 200, "API is running");
@@ -37,6 +43,9 @@ app.use((req, res) => {
 app.use((error, req, res, next) => {
     if (error.type === "entity.parse.failed") {
         return sendError(res, 400, "Invalid JSON body");
+    }
+    if (error.type === "entity.too.large") {
+        return sendError(res, 413, "Request body too large");
     }
     return serverError(res, error);
 });

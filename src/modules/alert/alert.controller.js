@@ -3,13 +3,16 @@ const { sendSuccess, serverError } = require("../../utils/response");
 
 const getAlerts = async (req, res) => {
     try {
-        const { domainId, severity, type, since, page, limit } = req.validated.query;
+        const { domainId, networkId, severity, type, since, page, limit } = req.validated.query;
+        // An alert belongs to a domain or a network; both are owned through userId.
         const where = {
-            domain: {
-                userId: req.user.id,
-            },
+            OR: [
+                { domain: { userId: req.user.id } },
+                { network: { userId: req.user.id } },
+            ],
         };
         if (domainId) where.domainId = domainId;
+        if (networkId) where.networkId = networkId;
         if (severity) where.severity = { in: severity };
         if (type) where.type = type;
         if (since) where.createdAt = { gte: since };
@@ -19,6 +22,11 @@ const getAlerts = async (req, res) => {
                 where,
                 include: {
                     domain: {
+                        select: {
+                            name: true,
+                        },
+                    },
+                    network: {
                         select: {
                             name: true,
                         },
@@ -34,7 +42,11 @@ const getAlerts = async (req, res) => {
         ]);
 
         return sendSuccess(res, 200, "Alerts fetched successfully", {
-            items: items.map(({ domain, ...alert }) => ({ ...alert, domainName: domain.name })),
+            items: items.map(({ domain, network, ...alert }) => ({
+                ...alert,
+                domainName: domain?.name ?? null,
+                networkName: network?.name ?? null,
+            })),
             pagination: {
                 page,
                 limit,

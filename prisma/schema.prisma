@@ -8,13 +8,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(dbgenerated("('user_'::text || nextval('\"User_id_seq\"'::regclass))"))
+  id        String    @id @default(dbgenerated("('user_'::text || nextval('\"User_id_seq\"'::regclass))"))
   name      String
-  email     String   @unique
+  email     String    @unique
   password  String
   token     String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   domains   Domain[]
+  networks  Network[]
 }
 
 model Domain {
@@ -161,9 +162,11 @@ model ExposedResource {
   @@index([domainId, scannedAt])
 }
 
+// Belongs to exactly one of domain / network (check constraint in the migration).
 model Alert {
   id        String   @id @default(dbgenerated("('alert_'::text || nextval('\"Alert_id_seq\"'::regclass))"))
-  domainId  String
+  domainId  String?
+  networkId String?
   type      String
   severity  String
   title     String
@@ -172,10 +175,13 @@ model Alert {
   key       String?
   createdAt DateTime @default(now())
 
-  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  domain  Domain?  @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  network Network? @relation(fields: [networkId], references: [id], onDelete: Cascade)
 
   @@unique([domainId, key])
+  @@unique([networkId, key])
   @@index([domainId, createdAt])
+  @@index([networkId, createdAt])
   @@index([severity])
 }
 
@@ -215,5 +221,122 @@ model Change {
   scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   @@index([domainId, createdAt])
+  @@index([scanId])
+}
+
+// ---------------------------------------------------------------------------
+// Local network scanning. The phone scans and uploads results; the server never
+// connects to these addresses. See network-apis.md.
+// ---------------------------------------------------------------------------
+
+model Network {
+  id             String   @id @default(dbgenerated("('network_'::text || nextval('\"Network_id_seq\"'::regclass))"))
+  userId         String
+  name           String
+  subnet         String
+  identifierHash String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans   NetworkScan[]
+  devices NetworkDevice[]
+  changes NetworkChange[]
+  alerts  Alert[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model NetworkScan {
+  id           String    @id @default(dbgenerated("('network_scan_'::text || nextval('\"NetworkScan_id_seq\"'::regclass))"))
+  networkId    String
+  status       String    @default("RUNNING")
+  progress     Json?
+  summary      Json?
+  changeCount  Int       @default(0)
+  error        String?
+  lastUploadAt DateTime?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  network      Network                    @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  observations NetworkDeviceObservation[]
+  changes      NetworkChange[]
+
+  @@index([networkId, createdAt])
+  @@index([status])
+}
+
+// identityKey is `mac:<mac>` when the MAC is known, otherwise `ip:<ip>`.
+model NetworkDevice {
+  id          String   @id @default(dbgenerated("('network_device_'::text || nextval('\"NetworkDevice_id_seq\"'::regclass))"))
+  networkId   String
+  identityKey String
+  identity    String
+  macAddress  String?
+  vendor      String?
+  firstSeenAt DateTime
+  lastSeenAt  DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  network      Network                    @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  observations NetworkDeviceObservation[]
+  changes      NetworkChange[]
+
+  @@unique([networkId, identityKey])
+  @@index([networkId, lastSeenAt])
+}
+
+model NetworkDeviceObservation {
+  id              String   @id @default(dbgenerated("('network_observation_'::text || nextval('\"NetworkDeviceObservation_id_seq\"'::regclass))"))
+  scanId          String
+  deviceId        String
+  ipAddress       String
+  hostname        String?
+  macAddress      String?
+  discoveryMethod String
+  observedAt      DateTime
+
+  scan   NetworkScan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  device NetworkDevice       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  ports  NetworkDevicePort[]
+
+  @@unique([scanId, ipAddress])
+  @@index([deviceId, observedAt])
+}
+
+model NetworkDevicePort {
+  id            String  @id @default(dbgenerated("('network_port_'::text || nextval('\"NetworkDevicePort_id_seq\"'::regclass))"))
+  observationId String
+  port          Int
+  protocol      String
+  state         String
+  service       String?
+
+  observation NetworkDeviceObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@unique([observationId, port, protocol])
+}
+
+model NetworkChange {
+  id        String   @id @default(dbgenerated("('network_change_'::text || nextval('\"NetworkChange_id_seq\"'::regclass))"))
+  networkId String
+  scanId    String
+  deviceId  String?
+  type      String
+  key       String
+  severity  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  network Network        @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  scan    NetworkScan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  device  NetworkDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([networkId, createdAt])
   @@index([scanId])
 }
